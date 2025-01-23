@@ -1,22 +1,22 @@
-import pymongo
-from flask import Flask, request, render_template, flash, url_for
-from markupsafe import Markup
-from flask import redirect
-from flask import session
-import sys
-import os
-import pprint
+from flask import Flask, redirect, url_for, session, request, jsonify
 from flask_oauthlib.client import OAuth
-from markupsafe import Markup
-from pymongo import DESCENDING
-from flask import Flask, render_template, jsonify, request, redirect, url_for
-from pymongo import MongoClient
+#from flask_oauthlib.contrib.apps import github #import to make requests to GitHub's OAuth
+from flask import render_template
+
+import pprint
+import os
 import time
+
+# This code originally from https://github.com/lepture/flask-oauthlib/blob/master/example/github.py
+# Edited by P. Conrad for SPIS 2016 to add getting Client Id and Secret from
+# environment variables, so that this will work on Heroku.
+# Edited by S. Adams for Designing Software for the Web to add comments and remove flash messaging
 
 app = Flask(__name__)
 
 app.debug = False #Change this to False for production
 #os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' #Remove once done debugging
+
 app.secret_key = os.environ['SECRET_KEY'] #used to sign session cookies
 oauth = OAuth(app)
 oauth.init_app(app) #initialize the app to be able to make requests for user information
@@ -34,6 +34,7 @@ github = oauth.remote_app(
     authorize_url='https://github.com/login/oauth/authorize' #URL for github's OAuth login
 )
 
+
 #context processors run before templates are rendered and add variable(s) to the template's context
 #context processors must return a dictionary 
 #this context processor adds the variable logged_in to the conext for all templates
@@ -41,43 +42,11 @@ github = oauth.remote_app(
 def inject_logged_in():
     is_logged_in = 'github_token' in session #this will be true if the token is in the session and false otherwise
     return {"logged_in":is_logged_in}
-    
-@github.tokengetter
-def get_github_oauth_token():
-    return session['github_token']
-
-
-
-connection_string = os.environ["MONGO_CONNECTION_STRING"]
-db_name = os.environ["MONGO_DBNAME"]
-
-client = pymongo.MongoClient(connection_string)
-db = client[db_name]
-collection = db['card_game'] #1. put the name of your collection in the quotes
-
-# Send a ping to confirm a successful connection
-try:
-    client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
-except Exception as e:
-    print(e)
-
-# Ensure index for efficient querying
-collection.create_index([("time", 1)])
-
-click_count = 0
-start_time = None
-game_state = "ready"
-final_time = 0
 
 @app.route('/')
 def home():
     return render_template('home.html')
-
-@app.route('/game')
-def game():
-    return render_template('game.html')
-
+    
 @app.route('/start', methods=['POST'])
 def start():
     global click_count, start_time, game_state
@@ -117,30 +86,7 @@ def reset():
 def result():
     return render_template('result.html', time=final_time)
 
-@app.route('/submit_score', methods=['POST'])
-def submit_score():
-    name = request.form['name']
-    score_doc = {
-        "name": name,
-        "time": final_time
-    }
-    collection.insert_one(score_doc)
-    return redirect(url_for('leaderboard'))
-
-@app.route('/leaderboard')
-def leaderboard():
-    pipeline = [
-        {"$sort": {"time": 1}},
-        {"$limit": 10},
-        {"$project": {
-            "name": 1,
-            "time": 1,
-            "_id": 0,
-            "rank": {"$add": [{"$indexOfArray": ["$time", "$time"]}, 1]}
-        }}
-    ]
-    scores = list(collection.aggregate(pipeline))
-    return render_template('leaderboard.html', scores=scores)
+#redirect to GitHub's OAuth page and confirm callback URL
 @app.route('/login')
 def login():   
     return github.authorize(callback=url_for('authorized', _external=True, _scheme='https')) #callback URL must match the pre-configured callback URL
@@ -170,14 +116,27 @@ def authorized():
     return render_template('message.html', message=message)
 
 
+@app.route('/page1')
+def renderPage1():
+    if 'user_data' in session:
+        user_data_pprint = pprint.pformat(session['user_data'])#format the user data nicely
+    else:
+        user_data_pprint = '';
+    return render_template('page1.html',dump_user_data=user_data_pprint)
+
+@app.route('/page2')
+def renderPage2():
+    return render_template('page2.html')
 
 @app.route('/googleb4c3aeedcc2dd103.html')
 def render_google_verification():
     return render_template('googleb4c3aeedcc2dd103.html')
 
-
 #the tokengetter is automatically called to check who is logged in.
+@github.tokengetter
+def get_github_oauth_token():
+    return session['github_token']
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()

@@ -1,9 +1,68 @@
 {% extends "layout.html" %}
 
-{% block title %}Home - Clicker Game{% endblock %}
+{% block title %}Home{% endblock %}
 
 {% block content %}
-<h1>Welcome to the Clicker Game!</h1>
-<p>Click as fast as you can to reach 52 clicks. Can you make it to the top of the leaderboard?</p>
-<a href="/game">Play Now</a>
+<div id="game">
+        <h1>Clicker Game</h1>
+        <p id="count">Clicks: 0</p>
+        <p id="timer">Time: 0.00s</p>
+        <button id="startButton">Start Game</button>
+        <button id="clickButton" disabled>Click Me!</button>
+        <button id="resetButton">Reset</button>
+    </div>
+
+    <script>
+        const countDisplay = document.getElementById('count');
+        const timerDisplay = document.getElementById('timer');
+        const startButton = document.getElementById('startButton');
+        const clickButton = document.getElementById('clickButton');
+        const resetButton = document.getElementById('resetButton');
+        let timerInterval;
+
+        startButton.addEventListener('click', () => {
+            fetch('/start', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    countDisplay.textContent = `Clicks: ${data.count}`;
+                    timerDisplay.textContent = `Time: ${data.time.toFixed(2)}s`;
+                    startButton.disabled = true;
+                    clickButton.disabled = false;
+                    startTimer();
+                });
+        });
+
+        clickButton.addEventListener('click', () => {
+            fetch('/click', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    countDisplay.textContent = `Clicks: ${data.count}`;
+                    timerDisplay.textContent = `Time: ${data.time.toFixed(2)}s`;
+                    if (data.state === 'over') {
+                        clearInterval(timerInterval);
+                        window.location.href = '/result';
+                    }
+                });
+        });
+
+        resetButton.addEventListener('click', () => {
+            fetch('/reset', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    countDisplay.textContent = `Clicks: ${data.count}`;
+                    timerDisplay.textContent = `Time: ${data.time.toFixed(2)}s`;
+                    startButton.disabled = false;
+                    clickButton.disabled = true;
+                    clearInterval(timerInterval);
+                });
+        });
+
+        function startTimer() {
+            let startTime = Date.now();
+            timerInterval = setInterval(() => {
+                let elapsedTime = (Date.now() - startTime) / 1000;
+                timerDisplay.textContent = `Time: ${elapsedTime.toFixed(2)}s`;
+            }, 10);
+        }
+    </script>
 {% endblock %}
